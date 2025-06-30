@@ -21,9 +21,9 @@ func main() {
 	fileserver := http.StripPrefix("/app",http.FileServer(http.Dir(".")))
 
 	svMux.Handle("/app/", cfg.middlewareMetricsInc(fileserver))
-	svMux.HandleFunc("GET /healthz", healthz)
-	svMux.HandleFunc("GET /metrics", cfg.metrics)
-	svMux.HandleFunc("POST /reset", cfg.reset)
+	svMux.HandleFunc("GET /api/healthz", healthz)
+	svMux.HandleFunc("GET /api/metrics", cfg.metrics)
+	svMux.HandleFunc("POST /api/reset", cfg.reset)
 
 	sv.ListenAndServe()
 }
