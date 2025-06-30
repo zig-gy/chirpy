@@ -3,9 +3,14 @@ package main
 import (
 	"fmt"
 	"net/http"
+	"sync/atomic"
 )
 
 func main() {
+	cfg := apiConfig{
+		fileserverHits: atomic.Int32{},
+	}
+
 	fmt.Println("Server starting on http://localhost:8080")
 	svMux := http.NewServeMux()
 	sv := http.Server {
@@ -13,8 +18,16 @@ func main() {
 		Addr: ":8080",
 	}
 
-	svMux.Handle("/app/", http.StripPrefix("/app",http.FileServer(http.Dir("."))))
+	fileserver := http.StripPrefix("/app",http.FileServer(http.Dir(".")))
+
+	svMux.Handle("/app/", cfg.middlewareMetricsInc(fileserver))
 	svMux.HandleFunc("/healthz", healthz)
+	svMux.HandleFunc("/metrics", cfg.metrics)
+	svMux.HandleFunc("/reset", cfg.reset)
 
 	sv.ListenAndServe()
+}
+
+type apiConfig struct {
+	fileserverHits atomic.Int32
 }
