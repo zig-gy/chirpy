@@ -13,7 +13,8 @@ func main() {
 		Addr: ":8080",
 	}
 
-	svMux.Handle("/", http.FileServer(http.Dir(".")))
+	svMux.Handle("/app/", http.StripPrefix("/app",http.FileServer(http.Dir("."))))
+	svMux.HandleFunc("/healthz", healthz)
 
 	sv.ListenAndServe()
 }
