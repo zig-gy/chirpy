@@ -1,1 +1,7 @@
+#Generated files
 sv
+chirpy
+internal/database
+
+#exclude secrets
+.env

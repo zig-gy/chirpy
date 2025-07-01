@@ -1,14 +1,30 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+	"github.com/zig-gy/chirpy/internal/database"
 )
 
 func main() {
+	godotenv.Load()
+	dbUrl := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbUrl)
+	if err != nil {
+		fmt.Printf("Error connecting to database: %v", err)
+		os.Exit(1)
+	}
+	dbQueries := database.New(db)
+
 	cfg := apiConfig{
 		fileserverHits: atomic.Int32{},
+		queries: dbQueries,
 	}
 
 	fmt.Println("Server starting on http://localhost:8080")
@@ -31,4 +47,5 @@ func main() {
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	queries *database.Queries
 }
