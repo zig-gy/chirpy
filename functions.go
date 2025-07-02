@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 )
@@ -30,4 +32,18 @@ func replaceBadWords(chirp string) string {
 	}
 
 	return strings.Join(words, " ")
+}
+
+func respondWithError(w http.ResponseWriter, code int, msg string) {
+	type errorResponse struct {
+		Error string `json:"error"`
+	}
+
+	errorJson, innerError := json.Marshal(errorResponse{Error: msg})
+	if innerError != nil {
+		fmt.Printf("Error encoding response: %v", innerError)
+		return
+	}
+	w.WriteHeader(code)
+	w.Write(errorJson)
 }

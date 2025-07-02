@@ -15,6 +15,7 @@ import (
 func main() {
 	godotenv.Load()
 	dbUrl := os.Getenv("DB_URL")
+	platform := os.Getenv("PLATFORM")
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		fmt.Printf("Error connecting to database: %v", err)
@@ -25,6 +26,7 @@ func main() {
 	cfg := apiConfig{
 		fileserverHits: atomic.Int32{},
 		queries: dbQueries,
+		platform: platform,
 	}
 
 	fmt.Println("Server starting on http://localhost:8080")
@@ -41,6 +43,7 @@ func main() {
 	svMux.HandleFunc("GET /admin/metrics", cfg.metrics)
 	svMux.HandleFunc("POST /admin/reset", cfg.reset)
 	svMux.HandleFunc("POST /api/validate_chirp", validateChirp)
+	svMux.HandleFunc("POST /api/users", cfg.createUsers)
 
 	sv.ListenAndServe()
 }
@@ -48,4 +51,5 @@ func main() {
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	queries *database.Queries
+	platform string
 }

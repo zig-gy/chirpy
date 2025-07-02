@@ -13,10 +13,6 @@ func validateChirp(writer http.ResponseWriter, request *http.Request) {
 		Body string `json:"body"`
 	}
 
-	type errorResponse struct {
-		Error string `json:"error"`
-	}
-
 	type okResponse struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
@@ -24,24 +20,12 @@ func validateChirp(writer http.ResponseWriter, request *http.Request) {
 	decoder := json.NewDecoder(request.Body)
 	params := requestBody{}
 	if err := decoder.Decode(&params); err != nil {
-		errorJson, innerError := json.Marshal(errorResponse{Error: fmt.Sprintf("Error decoding parameters: %v", err)})
-		if innerError != nil {
-			fmt.Printf("Error encoding response: %v", innerError)
-			return
-		}
-		writer.WriteHeader(500)
-		writer.Write(errorJson)
+		respondWithError(writer, 500,  fmt.Sprintf("Error decoding parameters: %v", err))
 		return
 	}
 
 	if len(params.Body) > 140 {
-		errorJson, innerError := json.Marshal(errorResponse{Error: "Chirp is too long"})
-		if innerError != nil {
-			fmt.Printf("Error encoding response: %v", innerError)
-			return
-		}
-		writer.WriteHeader(400)
-		writer.Write(errorJson)
+		respondWithError(writer, 400, "Chirp is too long")
 		return
 	}
 
