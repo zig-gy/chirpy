@@ -69,14 +69,6 @@ func (cfg *apiConfig) createChirp(writer http.ResponseWriter, request *http.Requ
 func (cfg *apiConfig) getChirps(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Add("Content-Type", "application/json")
 
-	type resChirp struct {
-		ID uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body string `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
-	}
-
 	chirps, err := cfg.queries.GetChirps(context.Background())
 	if err != nil {
 		respondWithError(writer, 500, fmt.Sprintf("Error getting from database: %v", err))
@@ -102,6 +94,52 @@ func (cfg *apiConfig) getChirps(writer http.ResponseWriter, request *http.Reques
 
 	writer.WriteHeader(200)
 	writer.Write(resBytes)
+}
+
+func (cfg *apiConfig) getOneChirp(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Add("Content-Type", "application/json")
+
+	param := request.PathValue("ChirpID")
+	chirpID, err := uuid.Parse(param)
+	if err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Can't parse ID: %v", err))
+		return
+	}
+
+	dbChirp, err := cfg.queries.GetChirpByID(context.Background(), chirpID)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			respondWithError(writer, 404, "Chirp not found")
+		} else {
+		respondWithError(writer, 500, fmt.Sprintf("Error getting chirp from database: %v", err))
+		}
+		return
+	}
+
+	res := resChirp{
+		ID: dbChirp.ID,
+		CreatedAt: dbChirp.CreatedAt,
+		UpdatedAt: dbChirp.UpdatedAt,
+		Body: dbChirp.Body,
+		UserID: dbChirp.UserID,
+	}
+
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error creating response: %v", err))
+		return
+	}
+
+	writer.WriteHeader(200)
+	writer.Write(resBytes)
+}
+
+type resChirp struct {
+	ID uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body string `json:"body"`
+	UserID uuid.UUID `json:"user_id"`
 }
 
 func validateChirp(chirp string) (string, error) {
