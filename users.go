@@ -5,21 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+
+	"github.com/zig-gy/chirpy/internal/auth"
+	"github.com/zig-gy/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) createUsers(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Add("Content-Type", "application/json")
 
-	type reqBody struct {
-		Email string `json:"email"`
-	}
 
-	type resUser struct {
-		ID string `json:"id"`
-		CreatedAt string `json:"created_at"`
-		UpdatedAt string `json:"updated_at"`
-		Email string `json:"email"`
-	}
 
 	decoder := json.NewDecoder(request.Body)
 	req := reqBody{}
@@ -28,7 +22,16 @@ func (cfg *apiConfig) createUsers(writer http.ResponseWriter, request *http.Requ
 		return
 	}
 
-	response, err := cfg.queries.CreateUser(context.Background(), req.Email)
+	hashPass, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error hashing password: %v", err))
+		return
+	}
+
+	response, err := cfg.queries.CreateUser(context.Background(), database.CreateUserParams{
+		Email: req.Email,
+		HashedPassword: hashPass,
+	})
 	if err != nil {
 		respondWithError(writer, 500, fmt.Sprintf("Error saving user: %v", err))
 		return
@@ -48,4 +51,53 @@ func (cfg *apiConfig) createUsers(writer http.ResponseWriter, request *http.Requ
 
 	writer.WriteHeader(201)
 	writer.Write(resBytes)
+}
+
+func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Add("Content-Type", "application/json")
+
+	decoder := json.NewDecoder(request.Body)
+	req := reqBody{}
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error decoding request: %v", err))
+		return
+	}
+
+	dbUser, err := cfg.queries.GetUserByEmail(context.Background(), req.Email)
+	if err != nil {
+		respondWithError(writer, 401, "Incorrect email or password")
+		return
+	}
+
+	if err := auth.CheckPasswordHash(req.Password, dbUser.HashedPassword); err != nil {
+		respondWithError(writer, 401, "Incorrect email or password")
+		return
+	}
+
+	res := resUser{
+		ID: dbUser.ID.String(),
+		CreatedAt: dbUser.CreatedAt.String(),
+		UpdatedAt: dbUser.UpdatedAt.String(),
+		Email: dbUser.Email,
+	}
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error encoding response: %v", err))
+		return
+	}
+
+	writer.WriteHeader(200)
+	writer.Write(resBytes)
+}
+
+type resUser struct {
+	ID string `json:"id"`
+	CreatedAt string `json:"created_at"`
+	UpdatedAt string `json:"updated_at"`
+	Email string `json:"email"`
+}
+
+type reqBody struct {
+	Email string `json:"email"`
+	Password string `json:"password"`
 }
