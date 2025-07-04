@@ -8,15 +8,27 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zig-gy/chirpy/internal/auth"
 	"github.com/zig-gy/chirpy/internal/database"
 )
 
 func (cfg *apiConfig) createChirp(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Add("Content-Type", "application/json")
 
+	token, err := auth.GetBearerToken(request.Header)
+	if err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Header authorization not found: %v", err))
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Not authorized: %v", err))
+		return
+	}
+
 	type reqChirp struct {
 		Body string `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
 	}
 
 	type resChirp struct {
@@ -41,7 +53,7 @@ func (cfg *apiConfig) createChirp(writer http.ResponseWriter, request *http.Requ
 	}
 
 	responseChirp, err := cfg.queries.CreateChirp(context.Background(), database.CreateChirpParams{
-		UserID: req.UserID,
+		UserID: userID,
 		Body: cleanBody,
 	})
 	if err != nil {

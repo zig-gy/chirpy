@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/zig-gy/chirpy/internal/auth"
 	"github.com/zig-gy/chirpy/internal/database"
@@ -74,11 +75,33 @@ func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	var timeToExpire time.Duration
+	if req.ExpiresInSeconds == 0 || req.ExpiresInSeconds > 3600 {
+		timeToExpire, err = time.ParseDuration("1h")
+		if err != nil {
+			respondWithError(writer, 500, fmt.Sprintf("Error parsing time: %v", err))
+			return
+		}
+	} else {
+		timeToExpire, err = time.ParseDuration(fmt.Sprintf("%ds", req.ExpiresInSeconds))
+		if err != nil {
+			respondWithError(writer, 500, fmt.Sprintf("Error parsing passed time: %v", err))
+			return
+		}
+	}
+
+	jwtToken, err := auth.MakeJWT(dbUser.ID, cfg.jwtSecret, timeToExpire)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error creating token: %v", err))
+		return
+	}
+
 	res := resUser{
 		ID: dbUser.ID.String(),
 		CreatedAt: dbUser.CreatedAt.String(),
 		UpdatedAt: dbUser.UpdatedAt.String(),
 		Email: dbUser.Email,
+		Token: jwtToken,
 	}
 	resBytes, err := json.Marshal(res)
 	if err != nil {
@@ -95,9 +118,11 @@ type resUser struct {
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 type reqBody struct {
 	Email string `json:"email"`
 	Password string `json:"password"`
+	ExpiresInSeconds int `json:"expires_in_seconds"`
 }

@@ -16,6 +16,7 @@ func main() {
 	godotenv.Load()
 	dbUrl := os.Getenv("DB_URL")
 	platform := os.Getenv("PLATFORM")
+	secret := os.Getenv("JWTSECRET")
 	db, err := sql.Open("postgres", dbUrl)
 	if err != nil {
 		fmt.Printf("Error connecting to database: %v", err)
@@ -27,6 +28,7 @@ func main() {
 		fileserverHits: atomic.Int32{},
 		queries: dbQueries,
 		platform: platform,
+		jwtSecret: secret,
 	}
 
 	fmt.Println("Server starting on http://localhost:8080")
@@ -55,4 +57,5 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	queries *database.Queries
 	platform string
+	jwtSecret string
 }
