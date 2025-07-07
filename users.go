@@ -14,8 +14,6 @@ import (
 func (cfg *apiConfig) createUsers(writer http.ResponseWriter, request *http.Request) {
 	writer.Header().Add("Content-Type", "application/json")
 
-
-
 	decoder := json.NewDecoder(request.Body)
 	req := reqBody{}
 	if err := decoder.Decode(&req); err != nil {
@@ -75,24 +73,37 @@ func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	var timeToExpire time.Duration
-	if req.ExpiresInSeconds == 0 || req.ExpiresInSeconds > 3600 {
-		timeToExpire, err = time.ParseDuration("1h")
-		if err != nil {
-			respondWithError(writer, 500, fmt.Sprintf("Error parsing time: %v", err))
-			return
-		}
-	} else {
-		timeToExpire, err = time.ParseDuration(fmt.Sprintf("%ds", req.ExpiresInSeconds))
-		if err != nil {
-			respondWithError(writer, 500, fmt.Sprintf("Error parsing passed time: %v", err))
-			return
-		}
+	timeToExpire, err := time.ParseDuration("1h")
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error parsing time: %v", err))
+		return
 	}
 
 	jwtToken, err := auth.MakeJWT(dbUser.ID, cfg.jwtSecret, timeToExpire)
 	if err != nil {
 		respondWithError(writer, 500, fmt.Sprintf("Error creating token: %v", err))
+		return
+	}
+
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error creating refresh token: %v", err))
+		return
+	}
+	
+	refreshExpire, err := time.ParseDuration("1440h")
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error parsing refresh expire time: %v", err))
+		return
+	}
+
+	refreshObject, err := cfg.queries.CreateRefreshToken(context.Background(), database.CreateRefreshTokenParams{
+		Token: refreshToken,
+		UserID: dbUser.ID,
+		ExpiresAt: time.Now().Add(refreshExpire),
+	})
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error creating refresh token: %v", err))
 		return
 	}
 
@@ -102,6 +113,7 @@ func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
 		UpdatedAt: dbUser.UpdatedAt.String(),
 		Email: dbUser.Email,
 		Token: jwtToken,
+		RefreshToken: refreshObject.Token,
 	}
 	resBytes, err := json.Marshal(res)
 	if err != nil {
@@ -113,16 +125,88 @@ func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
 	writer.Write(resBytes)
 }
 
+func (cfg *apiConfig) refresh(writer http.ResponseWriter, request *http.Request) {
+	type resRefresh struct {
+		Token string `json:"token"`
+	}
+
+	refreshToken, err := auth.GetBearerToken(request.Header)
+	if err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Header authorization not found: %v", err))
+		return
+	}
+
+	expiringAt, err := cfg.queries.GetRefreshTokenExpiresAt(context.Background(), refreshToken)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Refresh token does not exist: %v", err))
+		return
+	}
+
+	if time.Now().Compare(expiringAt) > 0 {
+		if err := cfg.queries.RevokeRefreshToken(context.Background(), refreshToken); err != nil {
+			respondWithError(writer, 500, fmt.Sprintf("Error revoking token: %v", err))
+			return
+		}
+		respondWithError(writer, 401, fmt.Sprintf("Refresh token revoked: %v", err))
+		return
+	}	
+
+	userID, err := cfg.queries.GetUserFromRefreshToken(context.Background(), refreshToken)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error getting user id: %v", err))
+		return
+	}
+
+	expiringTime, err := time.ParseDuration("1h")
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error parsing time: %v", err))
+		return
+	}
+
+	jwtToken, err := auth.MakeJWT(userID, cfg.jwtSecret, expiringTime)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error creating jwt token: %v", err))
+		return
+	}
+
+	res := resRefresh{
+		Token: jwtToken,
+	}
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error encoding: %v", err))
+		return
+	}
+
+	writer.WriteHeader(200)
+	writer.Write(resBytes)
+}
+
+func (cfg *apiConfig) revoke(writer http.ResponseWriter, request *http.Request) {
+	token, err := auth.GetBearerToken(request.Header)
+	if err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Authorization header not found: %v", err))
+		return
+	}
+
+	if err := cfg.queries.RevokeRefreshToken(context.Background(), token); err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error revoking token: %v", err))
+		return
+	}
+
+	writer.WriteHeader(204)
+}
+
 type resUser struct {
 	ID string `json:"id"`
 	CreatedAt string `json:"created_at"`
 	UpdatedAt string `json:"updated_at"`
 	Email string `json:"email"`
 	Token string `json:"token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
 type reqBody struct {
 	Email string `json:"email"`
 	Password string `json:"password"`
-	ExpiresInSeconds int `json:"expires_in_seconds"`
 }

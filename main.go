@@ -49,6 +49,8 @@ func main() {
 	svMux.HandleFunc("GET /api/chirps", cfg.getChirps)
 	svMux.HandleFunc("GET /api/chirps/{ChirpID}", cfg.getOneChirp)
 	svMux.HandleFunc("POST /api/login", cfg.login)
+	svMux.HandleFunc("POST /api/refresh", cfg.refresh)
+	svMux.HandleFunc("POST /api/revoke", cfg.revoke)
 	
 	sv.ListenAndServe()
 }
