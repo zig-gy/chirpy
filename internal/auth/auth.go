@@ -72,5 +72,10 @@ func GetBearerToken(headers http.Header) (string, error) {
 	if token == "" {
 		return "", fmt.Errorf("token not found")
 	}
-	return token, nil
+
+	const prefix = "Bearer "
+	if len(token) > len(prefix) && token[:len(prefix)] == prefix {
+		return token[len(prefix):], nil
+	}
+	return "", fmt.Errorf("invalid authorization header format")
 }
