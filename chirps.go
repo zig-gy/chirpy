@@ -146,6 +146,45 @@ func (cfg *apiConfig) getOneChirp(writer http.ResponseWriter, request *http.Requ
 	writer.Write(resBytes)
 }
 
+func (cfg *apiConfig) deleteChirp(writer http.ResponseWriter, request *http.Request) {
+	token, err := auth.GetBearerToken(request.Header)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Access not authorized: %v", err))
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Access not authorized: %v", err))
+		return
+	}
+
+	chirpIDstr := request.PathValue("ChirpID")
+	chirpID, err := uuid.Parse(chirpIDstr)
+	if err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Could not parse chirp id: %v", err))
+		return
+	}
+
+	chirp, err := cfg.queries.GetChirpByID(context.Background(), chirpID)
+	if err != nil {
+		respondWithError(writer, 404, fmt.Sprintf("Could not find chirp: %v",err))
+		return
+	}
+
+	if userID != chirp.UserID {
+		respondWithError(writer, 403, "You are not the user that posted this chirp")
+		return
+	}
+
+	if err := cfg.queries.DeleteChirp(context.Background(), chirp.ID); err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error deleting chirp: %v", err))
+		return
+	}
+
+	writer.WriteHeader(204)
+}
+
 type resChirp struct {
 	ID uuid.UUID `json:"id"`
 	CreatedAt time.Time `json:"created_at"`

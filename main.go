@@ -52,6 +52,7 @@ func main() {
 	svMux.HandleFunc("POST /api/refresh", cfg.refresh)
 	svMux.HandleFunc("POST /api/revoke", cfg.revoke)
 	svMux.HandleFunc("PUT /api/users", cfg.updateUser)
+	svMux.HandleFunc("DELETE /api/chirps/{ChirpID}", cfg.deleteChirp)
 	
 	sv.ListenAndServe()
 }

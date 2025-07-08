@@ -126,6 +126,8 @@ func (cfg *apiConfig) login(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (cfg *apiConfig) refresh(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Add("Content-Type", "application/json")
+
 	type resRefresh struct {
 		Token string `json:"token"`
 	}
@@ -198,6 +200,8 @@ func (cfg *apiConfig) revoke(writer http.ResponseWriter, request *http.Request) 
 }
 
 func (cfg *apiConfig) updateUser(writer http.ResponseWriter, request *http.Request) {
+	writer.Header().Add("Content-Type", "application/json")
+
 	type reqBody struct {
 		Email string `json:"email"`
 		Password string `json:"password"`
