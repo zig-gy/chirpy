@@ -51,6 +51,7 @@ func main() {
 	svMux.HandleFunc("POST /api/login", cfg.login)
 	svMux.HandleFunc("POST /api/refresh", cfg.refresh)
 	svMux.HandleFunc("POST /api/revoke", cfg.revoke)
+	svMux.HandleFunc("PUT /api/users", cfg.updateUser)
 	
 	sv.ListenAndServe()
 }

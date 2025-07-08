@@ -197,6 +197,63 @@ func (cfg *apiConfig) revoke(writer http.ResponseWriter, request *http.Request) 
 	writer.WriteHeader(204)
 }
 
+func (cfg *apiConfig) updateUser(writer http.ResponseWriter, request *http.Request) {
+	type reqBody struct {
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
+	req := reqBody{}
+	decoder := json.NewDecoder(request.Body)
+	if err := decoder.Decode(&req); err != nil {
+		respondWithError(writer, 400, fmt.Sprintf("Could not read the request body: %v", err))
+		return
+	}
+
+	hashedPass, err := auth.HashPassword(req.Password)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error hashing new password: %v", err))
+		return
+	}
+
+	token, err := auth.GetBearerToken(request.Header)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Access denied: %v", err))
+		return
+	}
+
+	userID, err := auth.ValidateJWT(token, cfg.jwtSecret)
+	if err != nil {
+		respondWithError(writer, 401, fmt.Sprintf("Access denied: %v", err))
+		return
+	}
+
+	newUser, err := cfg.queries.UpdateUserEmailAndPassword(context.Background(), database.UpdateUserEmailAndPasswordParams{
+		ID: userID,
+		Email: req.Email,
+		HashedPassword: hashedPass,
+	})
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error updating user: %v", err))
+		return
+	}
+	
+	res := resUser{
+		ID: newUser.ID.String(),
+		CreatedAt: newUser.CreatedAt.String(),
+		UpdatedAt: newUser.UpdatedAt.String(),
+		Email: newUser.Email,
+		Token: token,
+	}
+	resBytes, err := json.Marshal(res)
+	if err != nil {
+		respondWithError(writer, 500, fmt.Sprintf("Error encoding response: %v", err))
+		return
+	}
+
+	writer.WriteHeader(200)
+	writer.Write(resBytes)
+}
+
 type resUser struct {
 	ID string `json:"id"`
 	CreatedAt string `json:"created_at"`
